@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sniffdash"
+version = "0.1.0"
+description = "Network Traffic Analysis Dashboard (PCAP analytics + AI Q&A)"
+requires-python = ">=3.11"
+dependencies = [
+    "pyshark>=0.6",
+    "scapy>=2.5",
+    "pandas>=2.2",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+markers = [
+    "tshark: requires Wireshark's tshark binary (skipped automatically if missing)",
+]
