@@ -1,0 +1,43 @@
+# --- Secrets ---
+.env
+*.env
+!.env.example
+
+# --- Personal study notes (kept local by design) ---
+TERMINOLOGY.md
+
+# --- Capture files (can be large / contain private traffic) ---
+*.pcap
+*.pcapng
+*.cap
+captures/
+# Small, synthetic test fixtures are generated at test time, so none are committed.
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Streamlit ---
+.streamlit/secrets.toml
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
