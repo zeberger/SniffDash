@@ -155,6 +155,12 @@ class TestHttpTransaction:
         with pytest.raises(ValueError, match="precedes"):
             HttpTransaction("tx-3", make_request(), make_response(timestamp=99.0))
 
+    def test_pickle_round_trip(self):
+        # AC7 names the HTTP models too, not only Frame (audit finding R4).
+        tx = HttpTransaction("tx-5", make_request(), make_response())
+        restored = pickle.loads(pickle.dumps(tx))
+        assert restored == tx and restored.response_time_ms == pytest.approx(120.0)
+
     def test_zero_latency_is_allowed(self):
         tx = HttpTransaction("tx-4", make_request(), make_response(timestamp=100.0))
         assert tx.response_time_ms == 0.0
