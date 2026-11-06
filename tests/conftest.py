@@ -113,6 +113,40 @@ def build_http_scenario() -> list:
     return pkts
 
 
+def tls_client_hello(sni: bytes) -> bytes:
+    """A minimal but valid TLS 1.2-style ClientHello record carrying an SNI extension.
+
+    Built by hand (struct) so the test does not depend on Scapy's optional TLS layer.
+    Layout: record header → handshake header → ClientHello body → SNI extension.
+    """
+    name = b"\x00" + struct.pack("!H", len(sni)) + sni                       # host_name entry
+    sni_ext = struct.pack("!HH", 0, len(name) + 2) + struct.pack("!H", len(name)) + name
+    body = (b"\x03\x03" + b"\x11" * 32 + b"\x00"                            # version, random, no session
+            + struct.pack("!H", 4) + b"\x13\x01\x13\x02"                     # 2 cipher suites
+            + b"\x01\x00"                                                    # 1 compression method: null
+            + struct.pack("!H", len(sni_ext)) + sni_ext)
+    handshake = b"\x01" + struct.pack("!I", len(body))[1:] + body           # type 1 = ClientHello
+    return b"\x16\x03\x01" + struct.pack("!H", len(handshake)) + handshake  # type 22 = handshake
+
+
+def build_edge_cases() -> list:
+    """Two frames that exercise rarely-hit paths:
+
+      1  TLS ClientHello to 1.2.3.4:443 with SNI "secure.example.com"
+      2  DNS query whose question section is cut off (malformed)
+    """
+    from scapy.layers.inet import IP, TCP, UDP
+    from scapy.layers.l2 import Ether
+
+    eth = Ether(src=CLIENT_MAC, dst=GATEWAY_MAC)
+    tls = eth / IP(src=CLIENT, dst="1.2.3.4") / TCP(sport=50010, dport=443, flags="PA", seq=1, ack=1) / \
+        tls_client_hello(b"secure.example.com")
+    bad_dns = eth / IP(src=CLIENT, dst=RESOLVER) / UDP(sport=5000, dport=53) / \
+        b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07exa"  # label says 7 bytes, only 3 follow
+    tls.time, bad_dns.time = T0 + 1.0, T0 + 2.0
+    return [tls, bad_dns]
+
+
 # --- File fixtures (session-scoped: generated once per test run) ----------------------
 
 @pytest.fixture(scope="session")
@@ -133,6 +167,14 @@ def http_pcapng(capture_dir) -> Path:
     from scapy.utils import wrpcapng
     path = capture_dir / "http_scenario.pcapng"
     wrpcapng(str(path), build_http_scenario())
+    return path
+
+
+@pytest.fixture(scope="session")
+def edge_pcap(capture_dir) -> Path:
+    from scapy.utils import wrpcap
+    path = capture_dir / "edge_cases.pcap"
+    wrpcap(str(path), build_edge_cases())
     return path
 
 
