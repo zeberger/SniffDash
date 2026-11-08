@@ -142,7 +142,7 @@ ask a question → answer with clickable frame evidence.
 | # | Phase | Description | Status | Parallel | Depends | Plan | Report | PR |
 |---|-------|-------------|--------|----------|---------|------|--------|----|
 | 1 | Foundation | Domain models, parsing (PyShark + Scapy), frame repository | complete | - | - | [plan](../plans/phase-1-foundation.plan.md) | [report](../reports/phase-1-foundation-report.md) | [#1](https://github.com/zeberger/SniffDash/pull/1) |
-| 2 | Analysis engine | Metrics, HTTP pairing, stream reconstruction, analyzer registry | pending | - | 1 | - | - | - |
+| 2 | Analysis engine | Metrics, HTTP pairing, stream reconstruction, analyzer registry | complete | - | 1 | [plan](../plans/phase-2-analysis-engine.plan.md) | [report](../reports/phase-2-analysis-engine-report.md) | - |
 | 3 | AI Q&A | Context builder, query tools, OpenAI client, prompt, citation validation | pending | - | 2 | - | - | - |
 | 4 | Dashboard UI | AnalysisSession facade, config/.env, caching, Streamlit views and chat | pending | - | 2, 3 | - | - | - |
 
@@ -155,7 +155,7 @@ ask a question → answer with clickable frame evidence.
 
 **Phase 2: Analysis engine**
 - **Goal**: Compute every Module 1 metric and Module 2 HTTP transaction from the repository (Reqs 24–28 data, Req 29 stream data).
-- **Scope**: `analysis/` metric calculators, `HttpAnalyzer` with composite pairing (tshark links → TCP FIFO), stream reconstruction, `AnalysisEngine` + registry with per-analyzer fault isolation.
+- **Scope**: `analysis/` summary and timeline analyzers, `HttpAnalyzer` with FIFO pairing per TCP stream (RFC 9112 ordering), stream reconstruction, `AnalysisEngine` + registry with per-analyzer fault isolation.
 - **Success signal**: The reference capture yields the known transactions (200 at 120 ms, 404 at 60 ms, one unanswered POST) and the known metrics.
 
 **Phase 3: AI Q&A**
@@ -165,7 +165,7 @@ ask a question → answer with clickable frame evidence.
 
 **Phase 4: Dashboard UI**
 - **Goal**: Make Phases 1–3 usable in a browser (Reqs 23, 26, 29, 31).
-- **Scope**: `application/` facade + bootstrap + `.env` config loading, `ui/` component registry, upload, overview, charts, HTTP table, stream inspector, chat, Streamlit caching.
+- **Scope**: `application/` facade + bootstrap + `.env` config loading, `ui/` component registry, upload, overview, charts, HTTP table, stream inspector, chat, Streamlit caching (`@st.cache_data` on a single `load_and_analyze(file_bytes)` so parsing and analysis run once per file; the repository in `@st.cache_resource`).
 - **Success signal**: The manual walkthrough of the User Flow works on the reference capture without re-parsing on reruns.
 
 ### Parallelism Notes
@@ -184,6 +184,7 @@ once Phase 2 is merged, but they are kept in one phase so the facade is designed
 | Parser | PyShark primary, Scapy fallback | Scapy only; raw `tshark -T ek` | Wireshark-identical numbering and dissection, with no hard Wireshark dependency (user-confirmed) |
 | LLM access | OpenAI SDK directly behind `LLMClient` | LiteLLM; LangChain | User-confirmed; the adapter keeps a provider switch to one class |
 | Python | 3.11+ (developed on 3.14) | 3.10 | `StrEnum`, slots dataclasses (user-confirmed) |
+| HTTP pairing | FIFO per TCP stream (stream ID first) | tshark `request_in`/`response_in` links first, FIFO fallback | Probe: tshark links mispair pipelined requests; FIFO is HTTP/1.1's guaranteed order and identical on both parsers |
 | PRP artifact location | In-repo `PRPs/{prds,plans,reports}/` | `~/.prp/<project-key>/` store (PRP default) | Artifacts are course deliverables and must be versioned and reviewable in PRs |
 | Delivery | One feature branch + PR per phase; user approves each git action | Direct pushes to `main` | User requirement |
 
