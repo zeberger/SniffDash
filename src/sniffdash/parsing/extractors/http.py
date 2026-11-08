@@ -5,8 +5,9 @@ concern (Step 2, ``analysis/protocols/http/pairing.py``). With tshark, though,
 we also keep Wireshark's own hints (``request_in`` / ``response_in`` / ``time``),
 which give the pairing strategy a high-confidence first choice.
 
-Known limitation: if several pipelined HTTP messages share one TCP segment,
-only the first is extracted. This is rare in practice.
+Several HTTP messages in one TCP segment (pipelining): PyShark extracts all of
+them (``extra_messages``). Scapy decodes only the first. That is a documented
+fallback limitation, because Scapy's HTTP layer treats the rest as body bytes.
 """
 
 from __future__ import annotations
@@ -23,19 +24,28 @@ def _empty_message() -> dict[str, Any]:
     return {
         "kind": None, "method": None, "uri": None, "host": None, "version": None,
         "status_code": None, "reason": None, "headers": [], "body": "",
-        "request_in": None, "response_in": None, "time": None,
+        "request_in": None, "response_in": None, "time": None, "extra_messages": [],
     }
 
 
 @extractor_registry.register(Backend.PYSHARK)
 class PySharkHttpExtractor(LayerExtractor[Any]):
+    """tshark emits one ``http`` layer per HTTP message, so one segment carrying two
+    pipelined messages has two layers. The first becomes the ``http`` layer and the
+    rest go to ``extra_messages``, so pairing never loses a message."""
+
     layer = "http"
 
     def applies_to(self, packet: Any) -> bool:
         return pyshark_has_layer(packet, "http")
 
     def extract(self, packet: Any) -> dict[str, Any]:
-        http = packet["http"]
+        first, *rest = packet.get_multiple_layers("http")
+        msg = self._message(first)
+        msg["extra_messages"] = [self._message(layer) for layer in rest]
+        return msg
+
+    def _message(self, http: Any) -> dict[str, Any]:
         msg = _empty_message()
         method = pyshark_field(http, "request_method")
         code = to_int(pyshark_field(http, "response_code"))

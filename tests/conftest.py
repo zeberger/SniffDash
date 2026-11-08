@@ -147,7 +147,87 @@ def build_edge_cases() -> list:
     return [tls, bad_dns]
 
 
+def build_pipelined() -> list:
+    """Frames 4-5: GET /a, GET /b sent back-to-back; frames 6-7: 200 (for /a), 404 (for /b).
+
+    tshark's own request/response links get this WRONG (they pair 6 with /b).
+    """
+    s = _TcpSession(cport=50100)
+    return s.handshake(0.0) + [
+        s.client(b"GET /a HTTP/1.1\r\nHost: x.com\r\n\r\n", 0.10),
+        s.client(b"GET /b HTTP/1.1\r\nHost: x.com\r\n\r\n", 0.11),
+        s.server(http_response(200, "OK", b"AAA"), 0.30),
+        s.server(http_response(404, "Not Found", b"B"), 0.35),
+    ]
+
+
+def build_port_reuse() -> list:
+    """Two connections on the SAME 4-tuple. The first leaves GET /lost unanswered
+    and closes; the second (new SYN, new sequence numbers) gets 200 for GET /second.
+    Frames: 1-3 handshake, 4 GET /lost, 5-6 FIN, 7-9 handshake, 10 GET /second, 11 200.
+    """
+    first = _TcpSession(cport=50200)
+    pkts = first.handshake(0.0) + [
+        first.client(b"GET /lost HTTP/1.1\r\nHost: x\r\n\r\n", 0.1),
+        first._pkt(True, "FA", b"", 0.3),
+        first._pkt(False, "FA", b"", 0.31),
+    ]
+    second = _TcpSession(cport=50200, c_seq=90000, s_seq=70000)
+    return pkts + second.handshake(1.0) + [
+        second.client(b"GET /second HTTP/1.1\r\nHost: x\r\n\r\n", 1.1),
+        second.server(http_response(200, "OK", b"2"), 1.2),
+    ]
+
+
+def build_retransmission() -> list:
+    """Frame 4 GET /retx; frame 5 = the identical segment retransmitted; frame 6 200 OK."""
+    s = _TcpSession(cport=50300)
+    pkts = s.handshake(0.0)
+    request = s.client(b"GET /retx HTTP/1.1\r\nHost: x\r\n\r\n", 0.1)
+    duplicate = request.copy()
+    duplicate.time = request.time + 0.2
+    return pkts + [request, duplicate, s.server(http_response(200, "OK", b"r"), 0.4)]
+
+
+def build_two_in_one_segment() -> list:
+    """Frames 4-5: GET /a, GET /b; frame 6: ONE segment carrying both responses (200 then 404)."""
+    s = _TcpSession(cport=50400)
+    return s.handshake(0.0) + [
+        s.client(b"GET /a HTTP/1.1\r\nHost: x\r\n\r\n", 0.1),
+        s.client(b"GET /b HTTP/1.1\r\nHost: x\r\n\r\n", 0.11),
+        s.server(http_response(200, "OK", b"A") + http_response(404, "Not Found", b"B"), 0.3),
+    ]
+
+
+def _write_pcap(directory: Path, name: str, packets: list) -> Path:
+    from scapy.utils import wrpcap
+    path = directory / name
+    wrpcap(str(path), packets)
+    return path
+
+
 # --- File fixtures (session-scoped: generated once per test run) ----------------------
+
+@pytest.fixture(scope="session")
+def pipelined_pcap(capture_dir) -> Path:
+    return _write_pcap(capture_dir, "pipelined.pcap", build_pipelined())
+
+
+@pytest.fixture(scope="session")
+def port_reuse_pcap(capture_dir) -> Path:
+    return _write_pcap(capture_dir, "port_reuse.pcap", build_port_reuse())
+
+
+@pytest.fixture(scope="session")
+def retransmission_pcap(capture_dir) -> Path:
+    return _write_pcap(capture_dir, "retransmission.pcap", build_retransmission())
+
+
+@pytest.fixture(scope="session")
+def two_in_one_pcap(capture_dir) -> Path:
+    return _write_pcap(capture_dir, "two_in_one_segment.pcap", build_two_in_one_segment())
+
+
 
 @pytest.fixture(scope="session")
 def capture_dir(tmp_path_factory) -> Path:
@@ -216,3 +296,22 @@ def tshark_available() -> bool:
 
 
 requires_tshark = pytest.mark.skipif(not tshark_available(), reason="tshark (Wireshark) not installed")
+
+
+def backend_params():
+    """Parametrize a fixture over both parsers; PyShark auto-skips without tshark."""
+    from sniffdash.parsing.pyshark_parser import PySharkParser
+    from sniffdash.parsing.scapy_parser import ScapyParser
+    return [
+        pytest.param(PySharkParser, marks=[requires_tshark, pytest.mark.tshark], id="pyshark"),
+        pytest.param(ScapyParser, id="scapy"),
+    ]
+
+
+def analyze_file(parser_cls, path: Path):
+    """Parse + analyze a capture end-to-end; returns (report, repository)."""
+    from sniffdash.analysis import AnalysisEngine
+    from sniffdash.repository import InMemoryFrameRepository
+    outcome = parser_cls().parse(path)
+    repo = InMemoryFrameRepository.from_outcome(outcome)
+    return AnalysisEngine().run(repo, source=outcome.source, issues=outcome.issues), repo

@@ -12,8 +12,9 @@ tcp        srcport, dstport, stream, seq, ack, flags, payload_len
 udp        srcport, dstport, stream
 http       kind ("request"|"response"), method, uri, host, version,
            status_code, reason, headers [(name, value)...], body,
-           request_in, response_in (tshark's pairing hints, frame numbers),
-           time (tshark's request→response delta, seconds)
+           request_in, response_in (tshark's hints; NOT used for pairing, since
+           they mispair pipelined requests), time (tshark's delta, seconds),
+           extra_messages [same schema...] (2nd+ message in one segment; PyShark only)
 dns        id, is_response, qname, qtype, rcode, answers [str...]
 tls        content_type, handshake_type, version, sni
 =========  =====================================================================
@@ -25,14 +26,13 @@ package are discovered automatically; no other file changes.
 
 from __future__ import annotations
 
-import importlib
-import pkgutil
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
 from enum import StrEnum
 from typing import Any, ClassVar, Generic, TypeVar
 
 from sniffdash.parsing.options import ParserOptions
+from sniffdash.plugins import LazyDiscovery
 
 PacketT = TypeVar("PacketT")
 
@@ -65,8 +65,7 @@ E = TypeVar("E", bound=type[LayerExtractor])
 class ExtractorRegistry:
     def __init__(self, package: str | None = None) -> None:
         self._by_backend: dict[Backend, list[type[LayerExtractor]]] = {b: [] for b in Backend}
-        self._package = package
-        self._discovered = package is None
+        self._discovery = LazyDiscovery(package)
 
     def register(self, backend: Backend) -> Callable[[E], E]:
         def decorator(cls: E) -> E:
@@ -76,22 +75,12 @@ class ExtractorRegistry:
         return decorator
 
     def create_all(self, backend: Backend, options: ParserOptions) -> list[LayerExtractor]:
-        self._discover()
+        self._discovery.ensure()
         return [cls(options) for cls in self._by_backend[backend]]
 
     def registered(self, backend: Backend) -> tuple[type[LayerExtractor], ...]:
-        self._discover()
+        self._discovery.ensure()
         return tuple(self._by_backend[backend])
-
-    def _discover(self) -> None:
-        """Import every module in the extractors package once, so decorators run."""
-        if self._discovered:
-            return
-        self._discovered = True
-        pkg = importlib.import_module(self._package)
-        for mod in pkgutil.iter_modules(pkg.__path__):
-            if mod.name != "base":
-                importlib.import_module(f"{self._package}.{mod.name}")
 
 
 extractor_registry = ExtractorRegistry("sniffdash.parsing.extractors")

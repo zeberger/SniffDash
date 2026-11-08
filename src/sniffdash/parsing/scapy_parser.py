@@ -30,18 +30,30 @@ _LAYER_NAMES: dict[str, str | None] = {
 
 
 class StreamIndexer:
-    """Assigns Wireshark-style conversation indexes (separately per transport)."""
+    """Assigns Wireshark-style conversation indexes (separately per transport).
+
+    Port reuse: when a client opens a NEW TCP connection on a 4-tuple seen before,
+    tshark gives it a new stream index. A pure SYN (``syn_seq`` given) with a
+    different initial sequence number than the one that opened the current stream
+    does the same here. A retransmitted SYN (same sequence number) stays in its stream.
+    """
 
     def __init__(self) -> None:
         self._ids: dict[tuple[str, tuple, tuple], int] = {}
+        self._syn_seq: dict[tuple[str, tuple, tuple], int] = {}
         self._next: dict[str, int] = {}
 
-    def index(self, transport: str, a: tuple[str, int], b: tuple[str, int]) -> int:
+    def index(self, transport: str, a: tuple[str, int], b: tuple[str, int],
+              syn_seq: int | None = None) -> int:
         lo, hi = sorted((a, b))  # direction-independent key: A→B and B→A are one stream
         key = (transport, lo, hi)
-        if key not in self._ids:
+        new_connection = (key in self._ids and syn_seq is not None
+                          and self._syn_seq.get(key) != syn_seq)
+        if key not in self._ids or new_connection:
             self._ids[key] = self._next.get(transport, 0)
             self._next[transport] = self._ids[key] + 1
+        if syn_seq is not None:
+            self._syn_seq[key] = syn_seq
         return self._ids[key]
 
 
@@ -81,5 +93,8 @@ class ScapyParser(PacketParser[Any]):
         for transport in ("tcp", "udp"):
             t = layers.get(transport)
             if t is not None:
+                flags = t.get("flags", "")
+                pure_syn = transport == "tcp" and "S" in flags and "A" not in flags
                 t["stream"] = self._streams.index(
-                    transport, (ip["src"], t["srcport"]), (ip["dst"], t["dstport"]))
+                    transport, (ip["src"], t["srcport"]), (ip["dst"], t["dstport"]),
+                    syn_seq=t["seq"] if pure_syn else None)

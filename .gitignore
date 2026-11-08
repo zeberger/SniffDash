@@ -5,6 +5,7 @@
 
 # --- Personal study notes (kept local by design) ---
 TERMINOLOGY.md
+PROMPTS_LOG.md
 
 # --- Capture files (can be large / contain private traffic) ---
 *.pcap

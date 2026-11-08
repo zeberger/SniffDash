@@ -3,7 +3,7 @@
 Analyzes `.pcap` / `.pcapng` captures: global statistics, HTTP transaction reconstruction,
 and an AI Q&A interface whose answers cite frame-level evidence.
 
-**Status:** Phase 1 of 4 (domain, parsing and repository layers) is complete.
+**Status:** Phases 1–2 of 4 are complete (parsing foundation; analysis engine with metrics and HTTP transaction pairing).
 Roadmap and phase status: [`PRPs/prds/sniffdash.prd.md`](PRPs/prds/sniffdash.prd.md).
 
 ## Setup
@@ -37,6 +37,7 @@ src/sniffdash/
   domain/        models, results, errors (no third-party imports)
   parsing/       format detection, ParserFactory, PyShark/Scapy parsers, extractors/
   repository/    FrameRepository interface + in-memory implementation
+  analysis/      AnalysisEngine + analyzer plugins: summary, timeline, HTTP pairing, stream view
 tests/
   unit/          isolated logic tests
   integration/   real parsers on generated captures, backend parity

@@ -38,14 +38,16 @@ from sniffdash.domain.results import (
     AnalysisResult,
     CaptureSummary,
     HttpAnalysisResult,
+    HttpStreamView,
     ParseOutcome,
+    TrafficTimeline,
 )
 
 __all__ = [
     "AnalysisError", "AnalysisReport", "AnalysisResult", "CaptureError", "CaptureSummary",
     "CorruptCaptureError", "DuplicateFrameError", "Endpoint", "Frame", "FrameNotFoundError",
     "FrozenMap", "HttpAnalysisResult", "HttpMessage", "HttpRequest", "HttpResponse",
-    "HttpTransaction", "IssueSeverity", "LLMAuthError", "LLMContextOverflowError", "LLMError",
+    "HttpStreamView", "HttpTransaction", "IssueSeverity", "TrafficTimeline", "LLMAuthError", "LLMContextOverflowError", "LLMError",
     "LLMRateLimitError", "LLMResponseFormatError", "ParseIssue", "ParseOutcome",
     "ParserUnavailableError", "RepositoryError", "SniffDashError", "StatusClass", "Transport",
     "UnsupportedFormatError",

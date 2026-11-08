@@ -76,6 +76,28 @@ class CaptureSummary(AnalysisResult):
 
 
 @dataclass(frozen=True, slots=True)
+class TrafficTimeline(AnalysisResult):
+    """Packets and bytes per fixed time bucket (Req. 26 "traffic over time").
+
+    Empty buckets are kept (zero counts) so a chart shows silences, not a false
+    straight line between bursts.
+    """
+
+    key: ClassVar[str] = "timeline"
+
+    bucket_seconds: float = 1.0
+    buckets: tuple[tuple[float, int, int], ...] = ()  # (bucket start ts, packets, bytes)
+
+    @property
+    def packets_per_second(self) -> tuple[float, ...]:
+        return tuple(p / self.bucket_seconds for _, p, _ in self.buckets)
+
+    @property
+    def bytes_per_second(self) -> tuple[float, ...]:
+        return tuple(b / self.bucket_seconds for _, _, b in self.buckets)
+
+
+@dataclass(frozen=True, slots=True)
 class HttpAnalysisResult(AnalysisResult):
     """HTTP transactions after request/response pairing (Reqs 27-29)."""
 
@@ -96,6 +118,16 @@ class HttpAnalysisResult(AnalysisResult):
             if tx.response and tx.response.frame_number == frame_number:
                 return tx
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class HttpStreamView:
+    """One transaction rendered like Wireshark's "Follow HTTP Stream" (Req. 29)."""
+
+    transaction: HttpTransaction
+    request_text: str
+    response_text: str
+    frame_numbers: tuple[int, ...]  # every frame of the TCP stream from request to response
 
 
 @dataclass(frozen=True, slots=True)
