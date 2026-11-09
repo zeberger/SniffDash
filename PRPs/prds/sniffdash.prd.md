@@ -142,7 +142,7 @@ ask a question → answer with clickable frame evidence.
 | # | Phase | Description | Status | Parallel | Depends | Plan | Report | PR |
 |---|-------|-------------|--------|----------|---------|------|--------|----|
 | 1 | Foundation | Domain models, parsing (PyShark + Scapy), frame repository | complete | - | - | [plan](../plans/phase-1-foundation.plan.md) | [report](../reports/phase-1-foundation-report.md) | [#1](https://github.com/zeberger/SniffDash/pull/1) |
-| 2 | Analysis engine | Metrics, HTTP pairing, stream reconstruction, analyzer registry | complete | - | 1 | [plan](../plans/phase-2-analysis-engine.plan.md) | [report](../reports/phase-2-analysis-engine-report.md) | - |
+| 2 | Analysis engine | Metrics, HTTP pairing, stream reconstruction, analyzer registry | complete | - | 1 | [plan](../plans/phase-2-analysis-engine.plan.md) | [report](../reports/phase-2-analysis-engine-report.md) | [#3](https://github.com/zeberger/SniffDash/pull/3) |
 | 3 | AI Q&A | Context builder, query tools, OpenAI client, prompt, citation validation | pending | - | 2 | - | - | - |
 | 4 | Dashboard UI | AnalysisSession facade, config/.env, caching, Streamlit views and chat | pending | - | 2, 3 | - | - | - |
 

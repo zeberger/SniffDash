@@ -53,8 +53,8 @@ README links to the new artifacts, and repository links updated for the rename t
 
 ## Delivery
 
-- **Commits:** `dd3b937 feat(step-1): domain, parsing and repository layers`; audit follow-up: `Not created`
-- **Pull Request:** `https://github.com/zeberger/SniffDash/pull/1` (merged as `9ebaa09`); audit follow-up: `Not opened`
+- **Commits:** `dd3b937 feat(step-1): domain, parsing and repository layers`; audit follow-up: `b6adcf7 docs(prp): adopt Wirasm/prp format and close Phase 1 audit gaps`
+- **Pull Request:** `https://github.com/zeberger/SniffDash/pull/1` (merged as `9ebaa09`); audit follow-up: `https://github.com/zeberger/SniffDash/pull/2` (merged as `fb3642d`)
 - **Base / Head:** `main <- feat/step-1-foundation`; audit follow-up: `main <- docs/prp-format-step-1-audit`
 - **Source PRD:** `PRPs/prds/sniffdash.prd.md` — phase 1 marked `complete`
 - **Tracked follow-ups:** `None`
