@@ -91,6 +91,8 @@ needing encrypted-traffic inspection.
 | Must | Answers cite frame numbers and timestamps, validated against the capture (Req 34) | Module 3 requirement |
 | Should | Scapy fallback when tshark is missing | Grader machines may lack Wireshark |
 | Should | Parse caching across Streamlit reruns | User-confirmed requirement; avoids re-parsing on every click |
+| Should | Skill-level-adapted AI explanations | Personalized feature: the same facts, explained for beginner or expert |
+| Should | HTTPS metadata analysis (sizes, timing, bursts → traffic-type inference) | Creativity feature: insight into encrypted traffic without decryption |
 | Could | DNS / TLS analyzers | Extension points exist; likely future-assignment work |
 | Won't | Live capture, HTTP/2–3, TLS decryption | See "What We're NOT Building" |
 
@@ -142,8 +144,8 @@ ask a question → answer with clickable frame evidence.
 | # | Phase | Description | Status | Parallel | Depends | Plan | Report | PR |
 |---|-------|-------------|--------|----------|---------|------|--------|----|
 | 1 | Foundation | Domain models, parsing (PyShark + Scapy), frame repository | complete | - | - | [plan](../plans/phase-1-foundation.plan.md) | [report](../reports/phase-1-foundation-report.md) | [#1](https://github.com/zeberger/SniffDash/pull/1) |
-| 2 | Analysis engine | Metrics, HTTP pairing, stream reconstruction, analyzer registry | complete | - | 1 | [plan](../plans/phase-2-analysis-engine.plan.md) | [report](../reports/phase-2-analysis-engine-report.md) | - |
-| 3 | AI Q&A | Context builder, query tools, OpenAI client, prompt, citation validation | pending | - | 2 | - | - | - |
+| 2 | Analysis engine | Metrics, HTTP pairing, stream reconstruction, analyzer registry | complete | - | 1 | [plan](../plans/phase-2-analysis-engine.plan.md) | [report](../reports/phase-2-analysis-engine-report.md) | [#3](https://github.com/zeberger/SniffDash/pull/3) |
+| 3 | AI Q&A | Gemini client, context builder, query tools, skill-aware prompt, citation validation, HTTPS metadata analysis | complete | - | 2 | [plan](../plans/phase-3-ai-qa.plan.md) | [report](../reports/phase-3-ai-qa-report.md) | - |
 | 4 | Dashboard UI | AnalysisSession facade, config/.env, caching, Streamlit views and chat | pending | - | 2, 3 | - | - | - |
 
 ### Phase Details
@@ -160,7 +162,7 @@ ask a question → answer with clickable frame evidence.
 
 **Phase 3: AI Q&A**
 - **Goal**: Answer the four required question types with cited, validated frame evidence (Reqs 30–34).
-- **Scope**: `llm/` context builder + token budget, query tools, OpenAI adapter with retry, versioned system prompt, structured output, `CitationValidator`.
+- **Scope**: `llm/` context builder + token budget, query tools, Gemini adapter with retry, versioned skill-aware system prompt, `submit_answer` structured answers, `CitationValidator`, `.env` settings; `EncryptedFlowAnalyzer` plugin for HTTPS metadata.
 - **Success signal**: With a mocked LLM, every required query type resolves through tools, and invalid citations are flagged; one live smoke test passes with a real key.
 
 **Phase 4: Dashboard UI**
@@ -182,7 +184,9 @@ once Phase 2 is merged, but they are kept in one phase so the facade is designed
 |----------|--------|--------------|-----------|
 | UI framework | Streamlit behind `AnalysisSession` facade | Dash; FastAPI + separate UI | Least overhead for a single-user tool; the facade keeps an API split possible (user-confirmed) |
 | Parser | PyShark primary, Scapy fallback | Scapy only; raw `tshark -T ek` | Wireshark-identical numbering and dissection, with no hard Wireshark dependency (user-confirmed) |
-| LLM access | OpenAI SDK directly behind `LLMClient` | LiteLLM; LangChain | User-confirmed; the adapter keeps a provider switch to one class |
+| LLM access | Google Gemini (`google-genai`) behind `LLMClient` as `GeminiClient`; key `GEMINI_API_KEY` in `.env` | OpenAI SDK (original choice); LiteLLM; LangChain | Switched by the user (2026-11-09): free AI Studio key. The adapter design made it a one-class change |
+| Structured answers on Gemini | Final answer as a `submit_answer` function call, function-calling mode `ANY` | `response_schema` together with tools | Google docs: tools + structured output only on Gemini 3 preview models |
+| Personalization | Skill levels (beginner / intermediate / expert) change explanation style only | One fixed style | User feature request; the evidence rules stay identical across levels |
 | Python | 3.11+ (developed on 3.14) | 3.10 | `StrEnum`, slots dataclasses (user-confirmed) |
 | HTTP pairing | FIFO per TCP stream (stream ID first) | tshark `request_in`/`response_in` links first, FIFO fallback | Probe: tshark links mispair pipelined requests; FIFO is HTTP/1.1's guaranteed order and identical on both parsers |
 | PRP artifact location | In-repo `PRPs/{prds,plans,reports}/` | `~/.prp/<project-key>/` store (PRP default) | Artifacts are course deliverables and must be versioned and reviewable in PRs |

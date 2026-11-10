@@ -66,8 +66,8 @@ the PRD update, and `numpy` in `pyproject.toml`.
 
 ## Delivery
 
-- **Commits:** `Not created`
-- **Pull Request:** `Not opened`
+- **Commits:** `16a705f feat(phase-2): analysis engine with metrics and HTTP transaction pairing`
+- **Pull Request:** `https://github.com/zeberger/SniffDash/pull/3` (merged as `981b0c7`)
 - **Base / Head:** `main <- feat/phase-2-analysis-engine`
 - **Source PRD:** `PRPs/prds/sniffdash.prd.md` — phase 2 marked `complete`
 - **Tracked follow-ups:** `None`

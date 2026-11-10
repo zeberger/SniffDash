@@ -37,6 +37,8 @@ from sniffdash.domain.results import (
     AnalysisReport,
     AnalysisResult,
     CaptureSummary,
+    EncryptedFlow,
+    EncryptedFlowsResult,
     HttpAnalysisResult,
     HttpStreamView,
     ParseOutcome,
@@ -45,7 +47,7 @@ from sniffdash.domain.results import (
 
 __all__ = [
     "AnalysisError", "AnalysisReport", "AnalysisResult", "CaptureError", "CaptureSummary",
-    "CorruptCaptureError", "DuplicateFrameError", "Endpoint", "Frame", "FrameNotFoundError",
+    "CorruptCaptureError", "DuplicateFrameError", "EncryptedFlow", "EncryptedFlowsResult", "Endpoint", "Frame", "FrameNotFoundError",
     "FrozenMap", "HttpAnalysisResult", "HttpMessage", "HttpRequest", "HttpResponse",
     "HttpStreamView", "HttpTransaction", "IssueSeverity", "TrafficTimeline", "LLMAuthError", "LLMContextOverflowError", "LLMError",
     "LLMRateLimitError", "LLMResponseFormatError", "ParseIssue", "ParseOutcome",

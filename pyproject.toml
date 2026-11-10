@@ -13,6 +13,7 @@ dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",
     "python-dotenv>=1.0",
+    "google-genai>=1.30",
 ]
 
 [project.optional-dependencies]
@@ -21,10 +22,14 @@ dev = ["pytest>=8.0"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"sniffdash.llm.prompts" = ["*.md", "levels/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
 markers = [
     "tshark: requires Wireshark's tshark binary (skipped automatically if missing)",
+    "live_llm: calls the real Gemini API (needs GEMINI_API_KEY; skipped otherwise; uses free-tier quota)",
 ]
