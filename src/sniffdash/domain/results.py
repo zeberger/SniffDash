@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import ClassVar, TypeVar
 
 from sniffdash.domain.errors import IssueSeverity, ParseIssue
-from sniffdash.domain.models import Frame, HttpResponse, HttpTransaction
+from sniffdash.domain.models import Endpoint, Frame, HttpResponse, HttpTransaction
 
 R = TypeVar("R", bound="AnalysisResult")
 
@@ -118,6 +118,66 @@ class HttpAnalysisResult(AnalysisResult):
             if tx.response and tx.response.frame_number == frame_number:
                 return tx
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class EncryptedFlow:
+    """Observable metadata of one encrypted (TLS/HTTPS) TCP connection.
+
+    The payload is unreadable, but its *shape* is not: how much flows each way,
+    in what sizes, and with what timing. ``label`` is a rule-based INFERENCE from
+    these features, and ``reasons`` lists the rule conditions that produced it.
+    """
+
+    stream_id: int
+    client: Endpoint
+    server: Endpoint
+    sni: str | None
+    first_frame: int
+    last_frame: int
+    start_ts: float
+    end_ts: float
+    packets_up: int
+    packets_down: int
+    bytes_up: int                 # TCP payload bytes, client → server
+    bytes_down: int               # TCP payload bytes, server → client
+    down_size_mean: float
+    down_size_median: float
+    down_size_max: int
+    iat_mean: float               # inter-arrival time between data packets, seconds
+    iat_median: float
+    iat_p95: float
+    iat_cv: float                 # coefficient of variation (std / mean): 0 = perfectly regular
+    burst_count: int
+    burst_mean_bytes: float
+    largest_burst_share: float    # share of downstream bytes in the largest burst
+    burst_interval_cv: float | None  # regularity of burst start times (None: < 3 bursts)
+    label: str
+    reasons: tuple[str, ...]
+
+    @property
+    def duration_s(self) -> float:
+        return self.end_ts - self.start_ts
+
+    @property
+    def down_up_ratio(self) -> float:
+        return self.bytes_down / self.bytes_up if self.bytes_up else float("inf")
+
+
+@dataclass(frozen=True, slots=True)
+class EncryptedFlowsResult(AnalysisResult):
+    key: ClassVar[str] = "encrypted_flows"
+
+    flows: tuple[EncryptedFlow, ...] = ()
+
+    def by_label(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for flow in self.flows:
+            counts[flow.label] = counts.get(flow.label, 0) + 1
+        return dict(sorted(counts.items()))
+
+    def find(self, stream_id: int) -> EncryptedFlow | None:
+        return next((f for f in self.flows if f.stream_id == stream_id), None)
 
 
 @dataclass(frozen=True, slots=True)

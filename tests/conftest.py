@@ -30,6 +30,17 @@ from pathlib import Path
 
 import pytest
 
+def pytest_collection_modifyitems(config, items):
+    """Live Gemini tests spend free-tier quota: run them ONLY when explicitly selected
+    with ``-m live_llm``, never as part of an ordinary ``pytest`` run."""
+    if "live_llm" in (config.getoption("-m") or ""):
+        return
+    skip = pytest.mark.skip(reason="live Gemini test: run with  pytest -m live_llm")
+    for item in items:
+        if "live_llm" in item.keywords:
+            item.add_marker(skip)
+
+
 T0 = 1_700_000_000.0
 CLIENT, SERVER, RESOLVER = "10.0.0.2", "93.184.216.34", "8.8.8.8"
 CLIENT_MAC, GATEWAY_MAC = "02:00:00:00:00:02", "02:00:00:00:00:01"
@@ -199,6 +210,54 @@ def build_two_in_one_segment() -> list:
     ]
 
 
+def tls_app_data(body_size: int) -> bytes:
+    """One TLS application-data record (type 23, TLS 1.2 framing) with an opaque body.
+
+    Real HTTPS payloads look exactly like this from the outside: a 5-byte record
+    header followed by ciphertext the observer cannot read.
+    """
+    return b"\x17\x03\x03" + struct.pack("!H", body_size) + bytes([0xA5]) * body_size
+
+
+def _https_session(cport: int, sni: bytes, t0: float) -> tuple[_TcpSession, list]:
+    s = _TcpSession(cport=cport, sport=443)
+    return s, s.handshake(t0) + [s.client(tls_client_hello(sni), t0 + 0.03)]
+
+
+def _download_burst(s: _TcpSession, total: int, t: float, segment: int = 1400) -> list:
+    """Server sends `total` bytes as back-to-back 1400-byte TLS records, 1 ms apart."""
+    packets, sent = [], 0
+    while sent < total:
+        body = min(segment - 5, total - sent)
+        packets.append(s.server(tls_app_data(body), t))
+        sent, t = sent + body, t + 0.001
+    return packets
+
+
+def build_https_flows() -> list:
+    """Three encrypted connections to port 443 (TCP streams 0, 1, 2):
+
+      stream 0  video.example.com    5 bursts of 250 KB every 3 s over 12 s  → video_streaming
+      stream 1  images.example.com   one 300 KB burst                        → file_or_image_download
+      stream 2  api.example.com      6 small request/response pairs, 2 s apart → api_polling
+    """
+    video, packets = _https_session(51000, b"video.example.com", 0.0)
+    for i in range(5):
+        t = 1.0 + 3.0 * i
+        packets += [video.client(tls_app_data(120), t)] + _download_burst(video, 250_000, t + 0.02)
+
+    image, p = _https_session(51001, b"images.example.com", 0.2)
+    packets += p + [image.client(tls_app_data(150), 1.2)] + _download_burst(image, 300_000, 1.25)
+
+    api, p = _https_session(51002, b"api.example.com", 0.4)
+    packets += p
+    for i in range(6):
+        t = 1.5 + 2.0 * i
+        packets += [api.client(tls_app_data(200), t), api.server(tls_app_data(800), t + 0.04)]
+
+    return sorted(packets, key=lambda pkt: float(pkt.time))  # interleave like a real capture
+
+
 def _write_pcap(directory: Path, name: str, packets: list) -> Path:
     from scapy.utils import wrpcap
     path = directory / name
@@ -207,6 +266,11 @@ def _write_pcap(directory: Path, name: str, packets: list) -> Path:
 
 
 # --- File fixtures (session-scoped: generated once per test run) ----------------------
+
+@pytest.fixture(scope="session")
+def https_pcap(capture_dir) -> Path:
+    return _write_pcap(capture_dir, "https_flows.pcap", build_https_flows())
+
 
 @pytest.fixture(scope="session")
 def pipelined_pcap(capture_dir) -> Path:
@@ -306,6 +370,37 @@ def backend_params():
         pytest.param(PySharkParser, marks=[requires_tshark, pytest.mark.tshark], id="pyshark"),
         pytest.param(ScapyParser, id="scapy"),
     ]
+
+
+class ScriptedClient:
+    """A fake LLMClient that plays back pre-written replies, one per model call.
+
+    Each script step is either an LLMReply, or a callable(turns) -> LLMReply that can
+    read earlier tool results (e.g. copy the timestamp a tool returned into its
+    evidence, exactly as a well-behaved model would). Records every call it receives.
+    """
+
+    def __init__(self, *steps):
+        self.steps, self.calls = list(steps), []
+
+    def complete(self, system, turns, tools):
+        self.calls.append({"system": system, "turns": list(turns), "tools": list(tools)})
+        step = self.steps.pop(0)
+        return step(turns) if callable(step) else step
+
+
+def call(name, call_id=None, **arguments):
+    from sniffdash.llm.client import LLMReply, ToolCall
+    return LLMReply(text=None, tool_calls=(ToolCall(name, arguments, call_id),))
+
+
+def last_tool_result(turns, name):
+    """The content of the most recent tool result called `name`."""
+    for turn in reversed(turns):
+        for result in turn.tool_results:
+            if result.name == name:
+                return result.content
+    raise AssertionError(f"no result for {name}")
 
 
 def analyze_file(parser_cls, path: Path):

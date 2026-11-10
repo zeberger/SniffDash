@@ -78,8 +78,25 @@ class ScapyTcpExtractor(LayerExtractor[Any]):
             "seq": int(tcp.seq),            # absolute seq (Scapy has no relative numbering)
             "ack": int(tcp.ack),
             "flags": flags_to_str(int(tcp.flags)),
-            "payload_len": len(bytes(tcp.payload)),
+            "payload_len": self._payload_len(packet, tcp),
         }
+
+    @staticmethod
+    def _payload_len(packet: Any, tcp: Any) -> int:
+        """TCP data length from the IP header, as Wireshark computes ``tcp.len``.
+
+        ``len(tcp.payload)`` would also count Ethernet padding (the zero bytes that
+        pad short frames to 60 bytes), making a bare ACK look like it carries data.
+        """
+        from scapy.layers.inet import IP
+        from scapy.layers.inet6 import IPv6
+        header = (tcp.dataofs or 5) * 4
+        if packet.haslayer(IP) and packet[IP].len is not None:
+            ip = packet[IP]
+            return max(0, ip.len - ip.ihl * 4 - header)
+        if packet.haslayer(IPv6) and packet[IPv6].plen is not None:
+            return max(0, packet[IPv6].plen - header)  # assumes no extension headers
+        return len(bytes(tcp.payload))
 
 
 @extractor_registry.register(Backend.SCAPY)
