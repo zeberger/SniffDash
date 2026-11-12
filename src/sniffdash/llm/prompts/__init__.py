@@ -11,7 +11,8 @@ from importlib.resources import files
 
 from sniffdash.llm.answer import SkillLevel
 
-PROMPT_VERSION = "system_v1"
+# v2 (Phase 4): adds the partial-capture rule. Older versions stay in this folder as history.
+PROMPT_VERSION = "system_v2"
 _STYLE_SLOT = "{explanation_style}"
 
 

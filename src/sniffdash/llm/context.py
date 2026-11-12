@@ -77,11 +77,16 @@ class ContextBuilder:
                 "start": format_ts(s.start_ts) if s.start_ts is not None else None,
                 "end": format_ts(s.end_ts) if s.end_ts is not None else None,
                 "duration_s": round(s.duration_s, 6),
+                "partial": report.partial,
             },
             "protocols": dict(s.protocol_distribution),
             "top_sources": dict(s.top_sources),
             "top_destinations": dict(s.top_destinations),
         }
+        if report.partial:
+            context["capture"]["partial_note"] = (
+                "Only part of the file was analyzed (truncated file or packet limit). "
+                "All counts describe the loaded portion only.")
 
         http = report.get(HttpAnalysisResult)
         if http is not None:

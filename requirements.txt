@@ -1,0 +1,26 @@
+# Everything a new user needs:   pip install -r requirements.txt
+# Mirrors pyproject.toml ([project] dependencies + the dev extra). A test keeps the two in sync.
+#
+# Also recommended (not a pip package): Wireshark, which provides tshark for the
+# PyShark parser. Without it, SniffDash uses the pure-Python Scapy parser.
+
+# --- Parsing ---
+pyshark>=0.6
+scapy>=2.5
+
+# --- Analysis ---
+pandas>=2.2
+numpy>=1.26
+
+# --- Configuration (.env) ---
+python-dotenv>=1.0
+
+# --- AI Q&A (Google Gemini) ---
+google-genai>=1.30
+
+# --- Dashboard ---
+streamlit>=1.40
+plotly>=5.20
+
+# --- Tests ---
+pytest>=8.0

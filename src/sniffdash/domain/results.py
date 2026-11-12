@@ -198,6 +198,9 @@ class AnalysisReport:
     summary: CaptureSummary
     results: Mapping[str, AnalysisResult] = field(default_factory=dict)
     issues: tuple[ParseIssue, ...] = ()
+    # True when only part of the file was analyzed (truncated file or max-packets limit):
+    # every figure in this report then describes the loaded portion only.
+    partial: bool = False
 
     def get(self, result_type: type[R]) -> R | None:
         """Type-safe lookup: ``report.get(HttpAnalysisResult)``."""
