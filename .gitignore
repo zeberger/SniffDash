@@ -27,6 +27,8 @@ dist/
 .venv/
 venv/
 env/
+# scripts/version_matrix.py: one environment per Python/library combination
+.matrix/
 
 # --- Tooling caches ---
 .pytest_cache/

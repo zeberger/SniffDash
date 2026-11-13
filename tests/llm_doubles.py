@@ -6,17 +6,21 @@ from __future__ import annotations
 class ScriptedClient:
     """A fake LLMClient that plays back pre-written replies, one per model call.
 
-    Each script step is either an LLMReply, or a callable(turns) -> LLMReply that can
-    read earlier tool results (e.g. copy the timestamp a tool returned into its
-    evidence, exactly as a well-behaved model would). Records every call it receives.
+    Each script step is an LLMReply; a callable(turns) -> LLMReply that can read
+    earlier tool results (e.g. copy the timestamp a tool returned into its evidence,
+    exactly as a well-behaved model would); or an exception to raise, e.g. a quota
+    error. Records every call it receives.
     """
 
-    def __init__(self, *steps):
+    def __init__(self, *steps, model=None):
         self.steps, self.calls = list(steps), []
+        self.active_model = model
 
     def complete(self, system, turns, tools):
         self.calls.append({"system": system, "turns": list(turns), "tools": list(tools)})
         step = self.steps.pop(0)
+        if isinstance(step, BaseException):
+            raise step
         return step(turns) if callable(step) else step
 
 

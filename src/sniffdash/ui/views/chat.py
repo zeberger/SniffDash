@@ -16,6 +16,7 @@ import streamlit as st
 from sniffdash.application import AnalysisSession
 from sniffdash.domain.errors import LLMAuthError, LLMError, LLMRateLimitError
 from sniffdash.llm.answer import SkillLevel, ValidatedAnswer, parse_ts
+from sniffdash.ui import labels
 from sniffdash.ui.registry import ResultView, ViewContext, register_view
 
 SERVICE_OVERRIDE_KEY = "sniffdash_llm_service"  # tests inject a scripted service here
@@ -33,10 +34,25 @@ class ChatTurn:
     level: str
     answer: ValidatedAnswer | None = None
     error: str | None = None
+    reused: bool = False  # answered from an earlier identical question, with no AI request
 
 
 def history(fingerprint: str) -> list[ChatTurn]:
     return st.session_state.setdefault(HISTORY_KEY, {}).setdefault(fingerprint, [])
+
+
+def _normalized(question: str) -> str:
+    return " ".join(question.split()).casefold()
+
+
+def earlier_answer(turns: list[ChatTurn], question: str, level: str) -> ValidatedAnswer | None:
+    """Same capture (the history is per fingerprint), same question, same level → same answer.
+
+    Saves the free-tier quota: re-asking costs no request. Failed turns are never reused.
+    """
+    wanted = _normalized(question)
+    return next((t.answer for t in reversed(turns)
+                 if t.answer is not None and t.level == level and _normalized(t.question) == wanted), None)
 
 
 def friendly(exc: Exception) -> str:
@@ -80,7 +96,7 @@ def render_turn(session: AnalysisSession, turn: ChatTurn, index: int) -> None:
             st.caption(f"Evidence: {len(answer.valid_evidence)} citation(s), each verified against the capture")
             df = evidence_frame(session, answer)
             st.dataframe(df, hide_index=True, width="stretch", key=f"evidence_{session.fingerprint}_{index}",
-                         column_config={"rel_s": st.column_config.NumberColumn("Rel. s", format="%.3f")})
+                         column_config=labels.EVIDENCE)
             for tx_id in dict.fromkeys(t for t in df["transaction"] if t):
                 with st.expander(f"Show stream {tx_id}"):
                     view = session.stream(tx_id)
@@ -88,6 +104,11 @@ def render_turn(session: AnalysisSession, turn: ChatTurn, index: int) -> None:
                     st.code(view.response_text, language="http", wrap_lines=True)
         if answer.tools_used:
             st.caption("Looked up: " + ", ".join(dict.fromkeys(answer.tools_used)))
+        source = [f"Answered by {answer.model}"] if answer.model else []
+        if turn.reused:
+            source.append("same question asked earlier, so the stored answer was reused (no new AI request)")
+        if source:
+            st.caption(" · ".join(source))
 
 
 @register_view
@@ -114,11 +135,14 @@ class ChatView(ResultView):
         question = st.chat_input("Ask about this capture, e.g. “Which HTTP request was the slowest?”")
         if question:
             turn = ChatTurn(question=question, level=level)
-            try:
-                with st.spinner("Looking it up…"):
-                    turn.answer = session.ask(question, level, service)
-            except Exception as exc:  # A7: recorded as failed; earlier answers stay
-                turn.error = friendly(exc)
+            turn.answer = earlier_answer(turns, question, level)
+            turn.reused = turn.answer is not None
+            if not turn.reused:
+                try:
+                    with st.spinner("Looking it up…"):
+                        turn.answer = session.ask(question, level, service)
+                except Exception as exc:  # A7: recorded as failed; earlier answers stay
+                    turn.error = friendly(exc)
             turns.append(turn)
 
         with messages:

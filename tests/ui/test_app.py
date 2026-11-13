@@ -91,6 +91,19 @@ def test_ask_ai_renders_verified_evidence(app):
     assert "each verified against the capture" in texts(app.caption)
 
 
+def test_repeated_question_reuses_the_answer(app):
+    """Plan R1.3: the same question at the same level on the same capture costs no new request."""
+    client = ScriptedClient(call("submit_answer", answer="No DNS errors.", evidence=[], insufficient_data=True),
+                            model="gemini-main")
+    app.session_state[SERVICE_OVERRIDE_KEY] = LLMService(client)
+    open_capture(app.run(), "demo_http.pcap")
+    app.chat_input[0].set_value("Any DNS errors?").run()
+    app.chat_input[0].set_value("  any dns   ERRORS? ").run()
+    assert not app.exception and len(client.calls) == 1
+    captions = texts(app.caption)
+    assert "Answered by gemini-main" in captions and "stored answer was reused" in captions
+
+
 class FailingThenWorking:
     """First question hits the quota; the second succeeds."""
 

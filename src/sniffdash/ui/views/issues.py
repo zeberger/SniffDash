@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from sniffdash.ui import labels
 from sniffdash.ui.cache import frame_cached
 from sniffdash.ui.registry import ResultView, ViewContext, register_view
 
@@ -21,5 +22,4 @@ class IssuesView(ResultView):
         counts = df["severity"].value_counts()
         st.caption(" · ".join(f"{n} {sev}" for sev, n in counts.items())
                    + " · warnings affect single packets; errors affect the whole capture")
-        st.dataframe(df, hide_index=True, width="stretch", column_config={
-            "frame": st.column_config.NumberColumn("Frame", format="%d")})
+        st.dataframe(df, hide_index=True, width="stretch", column_config=labels.ISSUES)

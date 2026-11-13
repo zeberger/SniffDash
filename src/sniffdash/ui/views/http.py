@@ -5,21 +5,9 @@ from __future__ import annotations
 import streamlit as st
 
 from sniffdash.application import AnalysisSession
+from sniffdash.ui import labels
 from sniffdash.ui.cache import frame_cached
 from sniffdash.ui.registry import ResultView, ViewContext, register_view
-
-COLUMNS = {
-    "id": st.column_config.TextColumn("Transaction"),
-    "method": "Method", "host": "Host", "uri": "URI", "source": "Source", "destination": "Destination",
-    "status": st.column_config.NumberColumn("Status", format="%d"),
-    "reason": "Reason",
-    "response_ms": st.column_config.NumberColumn("Response time", format="%.1f ms"),
-    "request_frame": st.column_config.NumberColumn("Req. frame", format="%d"),
-    "response_frame": st.column_config.NumberColumn("Resp. frame", format="%d"),
-    "time_utc": st.column_config.DatetimeColumn("Time (UTC)", format="HH:mm:ss.SSS"),
-    "rel_s": st.column_config.NumberColumn("Rel. s", format="%.3f", help="Seconds since the first packet, "
-                                                                        "like Wireshark's default Time column"),
-}
 
 
 def render_stream(session: AnalysisSession, tx_id: str) -> None:
@@ -63,16 +51,16 @@ class HttpView(ResultView):
                       if http and http.orphan_responses else "")
                    + " · click a row to inspect its stream")
 
-        event = st.dataframe(df, hide_index=True, width="stretch", column_config=COLUMNS,
+        event = st.dataframe(df, hide_index=True, width="stretch", column_config=labels.TRANSACTIONS,
                              on_select="rerun", selection_mode="single-row", key=f"http_table_{session.fingerprint}")
         rows = event.selection.rows if event and hasattr(event, "selection") else []
 
         ids = list(df["id"])
-        labels = {r.id: f"{r.id} · {r.method} {r.host}{r.uri} · "
+        captions = {r.id: f"{r.id} · {r.method} {r.host}{r.uri} · "
                         f"{'no response' if r.reason == 'no response' else int(r.status)}"
                   for r in df.itertuples()}
         # Keyboard-accessible fallback that follows the table selection.
         chosen = st.selectbox("Inspect transaction", ids, index=rows[0] if rows else 0,
-                              format_func=labels.get, key=f"http_pick_{session.fingerprint}_{rows[0] if rows else 'n'}")
+                              format_func=captions.get, key=f"http_pick_{session.fingerprint}_{rows[0] if rows else 'n'}")
         st.divider()
         render_stream(session, chosen)

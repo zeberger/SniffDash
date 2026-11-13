@@ -11,7 +11,7 @@ from google.genai import errors, types
 
 from sniffdash.config import Settings
 from sniffdash.domain.errors import LLMAuthError, LLMContextOverflowError, LLMError, LLMRateLimitError
-from sniffdash.llm.client import GeminiClient, ToolCall, ToolResult, Turn
+from sniffdash.llm.client import FALLBACK_COOLDOWN_S, RETRY_STATUS_CODES, GeminiClient, ToolCall, ToolResult, Turn
 
 TOOLS = [{"name": "get_frames", "description": "frames",
           "parameters": {"type": "object", "properties": {"frame_numbers": {"type": "array",
@@ -19,13 +19,16 @@ TOOLS = [{"name": "get_frames", "description": "frames",
 
 
 class FakeModels:
-    def __init__(self, response=None, error=None):
-        self.response, self.error, self.calls = response, error, []
+    """``error`` fails every call; ``errors`` fails calls in order (None = succeed)."""
+
+    def __init__(self, response=None, error=None, errors=()):
+        self.response, self.error, self.errors, self.calls = response, error, list(errors), []
 
     def generate_content(self, *, model, contents, config):
         self.calls.append({"model": model, "contents": contents, "config": config})
-        if self.error:
-            raise self.error
+        error = self.errors.pop(0) if self.errors else self.error
+        if error:
+            raise error
         return self.response
 
 
@@ -43,9 +46,11 @@ def call_part(name, args, call_id=None):
     return types.Part(function_call=types.FunctionCall(name=name, args=args, id=call_id))
 
 
-def client(**kwargs):
+def client(settings=None, clock=None, **kwargs):
     sdk = FakeSdk(**kwargs)
-    return GeminiClient(Settings(gemini_model="gemini-test"), sdk_client=sdk), sdk
+    settings = settings or Settings(gemini_model="gemini-test", gemini_fallback_model=None)
+    extra = {"clock": clock} if clock else {}
+    return GeminiClient(settings, sdk_client=sdk, **extra), sdk
 
 
 def test_request_shape():
@@ -114,6 +119,65 @@ def test_error_mapping(error, expected, fragment):
     c, _ = client(error=error)
     with pytest.raises(expected, match=fragment):
         c.complete("S", [Turn("user", text="q")], TOOLS)
+
+
+QUOTA = api_error(429, status="RESOURCE_EXHAUSTED")
+SUBMIT = reply_with(call_part("submit_answer", {}))
+
+
+def test_thinking_level_is_sent_and_can_be_turned_off():
+    """Plan R1.3: 'low' thinking took a question from 19.9 s to 5.5 s, measured live."""
+    c, sdk = client(Settings(gemini_model="m", gemini_thinking_level="low"), response=SUBMIT)
+    c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert sdk.models.calls[0]["config"].thinking_config.thinking_level == types.ThinkingLevel.LOW
+    c, sdk = client(Settings(gemini_model="m", gemini_thinking_level=None), response=SUBMIT)
+    c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert sdk.models.calls[0]["config"].thinking_config is None      # the model's own default
+
+
+def test_quota_switches_to_the_fallback_model_then_returns_after_the_cooldown():
+    now = [0.0]
+    c, sdk = client(Settings(gemini_model="main", gemini_fallback_model="lite"), clock=lambda: now[0],
+                    errors=[QUOTA], response=SUBMIT)
+    with pytest.raises(LLMRateLimitError) as caught:
+        c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert caught.value.switched_model == "lite" and c.active_model == "lite"
+    c.complete("S", [Turn("user", text="q")], TOOLS)
+    now[0] = FALLBACK_COOLDOWN_S + 1
+    c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert [call["model"] for call in sdk.models.calls] == ["main", "lite", "main"]
+
+
+def test_quota_on_the_fallback_too_is_a_plain_quota_error():
+    c, _ = client(Settings(gemini_model="main", gemini_fallback_model="lite"), errors=[QUOTA, QUOTA])
+    with pytest.raises(LLMRateLimitError):
+        c.complete("S", [Turn("user", text="q")], TOOLS)
+    with pytest.raises(LLMRateLimitError, match="both the main and the fallback") as caught:
+        c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert caught.value.switched_model is None
+
+
+def test_overloaded_main_model_switches_to_the_fallback():
+    """Measured 2026-11-13: the main model returned 504s after retries while the lite model answered."""
+    overloaded = errors.ServerError(504, {"error": {"code": 504, "message": "Deadline expired",
+                                                    "status": "DEADLINE_EXCEEDED"}})
+    c, sdk = client(Settings(gemini_model="main", gemini_fallback_model="lite"), errors=[overloaded], response=SUBMIT)
+    with pytest.raises(LLMError, match="Switching to 'lite'") as caught:
+        c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert caught.value.switched_model == "lite"
+    c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert [call["model"] for call in sdk.models.calls] == ["main", "lite"]
+
+
+def test_no_fallback_configured_means_no_switch():
+    c, _ = client(error=QUOTA)
+    with pytest.raises(LLMRateLimitError) as caught:
+        c.complete("S", [Turn("user", text="q")], TOOLS)
+    assert caught.value.switched_model is None and c.active_model == "gemini-test"
+
+
+def test_transient_server_errors_are_retried_but_quota_is_not():
+    assert 504 in RETRY_STATUS_CODES and 503 in RETRY_STATUS_CODES and 429 not in RETRY_STATUS_CODES
 
 
 def test_missing_key_explains_how_to_get_one():

@@ -30,6 +30,16 @@ def test_all_sections_present(report):
     assert overview["slowest"][0]["id"] == "tx-4" and overview["slowest"][0]["rt_ms"] == pytest.approx(120.0)
 
 
+def test_both_frames_carry_their_timestamps(report):
+    """Plan R1.3: a 'slowest request' answer can cite request and response with no lookup."""
+    ctx = ContextBuilder().build(report)
+    slowest = ctx["http_overview"]["slowest"][0]
+    assert (slowest["req_frame"], slowest["req_time"]) == (4, "2023-11-14T22:13:20.030Z")
+    assert (slowest["resp_frame"], slowest["resp_time"]) == (5, "2023-11-14T22:13:20.150Z")
+    unanswered = next(r for r in ctx["transaction_index"]["rows"] if r[2] is None)
+    assert unanswered[4] is None                               # no response → no response time
+
+
 def test_full_index_when_it_fits(report):
     index = ContextBuilder().build(report)["transaction_index"]
     assert [row[0] for row in index["rows"]] == ["tx-4", "tx-6", "tx-13"] and "truncated" not in index

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from conftest import ScriptedClient, analyze_file, call, last_tool_result
-from sniffdash.domain.errors import LLMError, LLMResponseFormatError
+from sniffdash.domain.errors import LLMError, LLMRateLimitError, LLMResponseFormatError
 from sniffdash.llm.answer import SkillLevel
 from sniffdash.llm.client import LLMReply
 from sniffdash.llm.prompts import build_system_prompt
@@ -46,6 +46,28 @@ def test_tool_then_answer(analyzed):
     first_turn = client.calls[0]["turns"][0].text
     assert first_turn.startswith("CAPTURE CONTEXT (JSON):") and "Which request was slowest?" in first_turn
     assert {t["name"] for t in client.calls[0]["tools"]} >= {"submit_answer", "slowest_http_requests"}
+
+
+def test_answer_records_the_model(analyzed):
+    assert ask(ScriptedClient(submit(insufficient=True), model="gemini-main"), analyzed).model == "gemini-main"
+
+
+def test_quota_switch_mid_question_restarts_on_the_fallback(analyzed):
+    """Plan R1.3: the quota runs out after a tool round; the question starts over, cleanly."""
+    switched = LLMRateLimitError("quota", switched_model="gemini-lite")
+    client = ScriptedClient(call("slowest_http_requests", limit=1), switched,
+                            call("slowest_http_requests", limit=1), cite_slowest, model="gemini-lite")
+    result = ask(client, analyzed)
+    assert result.fully_grounded and result.model == "gemini-lite"
+    assert len(client.calls[2]["turns"]) == 1                 # restarted from the first turn only
+    assert result.tools_used == ("slowest_http_requests",)    # tools from the abandoned attempt don't count
+
+
+def test_quota_without_a_fallback_is_reported(analyzed):
+    client = ScriptedClient(LLMRateLimitError("quota"), submit(insufficient=True))
+    with pytest.raises(LLMRateLimitError):
+        ask(client, analyzed)
+    assert len(client.calls) == 1                             # no blind retry
 
 
 def test_parallel_tool_calls_in_one_round(analyzed):

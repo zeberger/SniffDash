@@ -32,7 +32,7 @@ streamlit run app.py                    # opens http://localhost:8501
 | Where | What you get |
 |---|---|
 | **Sidebar** | Upload a capture, or pick one from `captures/`; choose the parser (auto / PyShark / Scapy); set **Max packets** (default 200,000). Larger files are cut there and clearly marked **partial**. |
-| **Overview** | Packets, duration, data volume, start/end time; traffic over time (packets/s or bytes/s); protocol breakdown; top source / destination IPs. Every chart has a table view. |
+| **Overview** | Packets, duration, data volume, start/end time; traffic over time (packets or bytes per interval; drag to move along the time axis, scroll to zoom, never past the first/last packet); packets per protocol; top source / destination IPs. Every chart has a table view; hover any column header for an explanation. |
 | **HTTP** | Every transaction: method, host, URI, source/destination IP:port, status, response time, request/response frame numbers, absolute (UTC) and relative time. **Click a row** to see its request and response, as in Wireshark's *Follow HTTP Stream*. |
 | **Encrypted** | (shown when the capture has HTTPS/TLS) Each encrypted connection's volume, timing and bursts, with an *inferred* traffic type (video streaming, download, API polling) and the reasons behind it. |
 | **Ask AI** | Ask in plain language (English or Hebrew) at a **beginner / intermediate / expert** level. Each answer lists its evidence (frame + timestamp), checked against the capture; unverifiable citations are flagged. Chat history is kept per capture. |
@@ -47,8 +47,14 @@ streamlit run app.py                    # opens http://localhost:8501
 - **What is sent to Google:** a JSON summary of the capture (statistics, hosts, URIs, timings) and, when the model
   asks for one, a transaction's text, with `Authorization` / `Cookie` headers and password-like fields redacted and
   bodies truncated. On the free tier, Google may use prompts to improve its products.
-- **Quota:** free-tier limits are small; one question uses about 1–5 requests. Errors (quota, key) are shown in the
-  chat and never erase earlier answers.
+- **Speed:** `GEMINI_THINKING_LEVEL` (default `low`) keeps the model's "thinking" short; our questions are
+  lookups. Measured on the demo: "Which HTTP request was the slowest?" went from 19.9 s and 3 requests to about
+  5 s and 1 request.
+- **Quota:** free-tier limits are small; most questions use 1–2 requests, and asking the same question again (same
+  capture, same level) reuses the stored answer with no request. When the main model's quota is used up or it is
+  overloaded, SniffDash switches to `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`, separate quota) for
+  10 minutes; each answer says which model wrote it. Errors (quota, key) are shown in the chat and never erase
+  earlier answers.
 - **Privacy defaults:** `.env` is git-ignored; Streamlit's usage statistics are switched off in `.streamlit/config.toml`.
 
 ## Tests

@@ -9,11 +9,16 @@ One question runs a short conversation:
   4. the answer's arguments are schema-checked (one repair turn allowed), then
      every citation is verified against the capture.
 
+If the main model's quota runs out (or it stays overloaded) mid-question and the
+client switches to its fallback model, the question restarts once from step 1 there.
+
 The model never computes or remembers facts on its own: tools compute, the
 validator checks, and the model explains.
 """
 
 from __future__ import annotations
+
+from dataclasses import replace
 
 from sniffdash.domain.errors import LLMError, LLMResponseFormatError
 from sniffdash.domain.results import AnalysisReport
@@ -51,8 +56,21 @@ class LLMService:
         declarations = [*self._tools.declarations(), SUBMIT_DECLARATION]
         tool_ctx = ToolContext(report, repo)
         context_json = ContextBuilder.render(self._context.build(report))
-        turns = [Turn("user", text=f"CAPTURE CONTEXT (JSON):\n{context_json}\n\nQUESTION:\n{question}")]
+        first = Turn("user", text=f"CAPTURE CONTEXT (JSON):\n{context_json}\n\nQUESTION:\n{question}")
+        try:
+            answer = self._converse(system, declarations, first, tool_ctx, repo, level)
+        except LLMError as exc:
+            if not exc.switched_model:
+                raise
+            # The main model's quota ran out or it is overloaded, and the client moved to its fallback
+            # model. Restart from the first turn: one model's replies (thought signatures) can't be
+            # replayed to another.
+            answer = self._converse(system, declarations, first, tool_ctx, repo, level)
+        return replace(answer, model=getattr(self._client, "active_model", None))
 
+    def _converse(self, system: str, declarations: list[dict], first: Turn, tool_ctx: ToolContext,
+                  repo: FrameRepository, level: SkillLevel) -> ValidatedAnswer:
+        turns = [first]
         tools_used: list[str] = []
         tool_rounds = 0
         repaired = False

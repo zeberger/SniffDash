@@ -104,6 +104,12 @@ class AnalysisSession:
     def has_errors(self) -> bool:
         return any(i.severity is IssueSeverity.ERROR for i in self.issues)
 
+    @property
+    def bucket_seconds(self) -> float:
+        """Width of one traffic-timeline interval, so charts can say "per 10 ms"."""
+        timeline = self.report.get(TrafficTimeline)
+        return timeline.bucket_seconds if timeline else 1.0
+
     def relative(self, ts: float | None) -> float | None:
         start = self.summary.start_ts
         return None if ts is None or start is None else round(ts - start, 6)
