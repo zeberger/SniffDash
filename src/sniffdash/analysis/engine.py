@@ -32,7 +32,7 @@ class AnalysisEngine:
         self._options = options or AnalysisOptions()
 
     def run(self, repo: FrameRepository, *, source: str = "",
-            issues: Iterable[ParseIssue] = ()) -> AnalysisReport:
+            issues: Iterable[ParseIssue] = (), partial: bool = False) -> AnalysisReport:
         ctx = AnalysisContext(self._options)
 
         try:
@@ -50,4 +50,4 @@ class AnalysisEngine:
                 ctx.warn(f"Analyzer '{analyzer.key}' failed: {exc}", severity=IssueSeverity.ERROR)
 
         return AnalysisReport(source=source, summary=summary, results=results,
-                              issues=tuple(issues) + tuple(ctx.issues))
+                              issues=tuple(issues) + tuple(ctx.issues), partial=partial)

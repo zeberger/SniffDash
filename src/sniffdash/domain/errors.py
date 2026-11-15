@@ -62,7 +62,16 @@ class AnalysisError(SniffDashError):
 
 
 class LLMError(SniffDashError):
-    """Base class for failures talking to the language model."""
+    """Base class for failures talking to the language model.
+
+    ``switched_model`` is set when the failure made the client move to its fallback
+    model (quota used up, or the main model overloaded), so the caller can restart
+    the question there.
+    """
+
+    def __init__(self, message: str = "", *, switched_model: str | None = None) -> None:
+        super().__init__(message)
+        self.switched_model = switched_model
 
 
 class LLMAuthError(LLMError):
@@ -70,7 +79,7 @@ class LLMAuthError(LLMError):
 
 
 class LLMRateLimitError(LLMError):
-    """The provider throttled us (HTTP 429); retried with backoff."""
+    """The provider throttled us (HTTP 429): the model's quota is used up for now."""
 
 
 class LLMContextOverflowError(LLMError):

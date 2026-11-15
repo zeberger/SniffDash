@@ -6,6 +6,7 @@
 # --- Personal study notes (kept local by design) ---
 TERMINOLOGY.md
 PROMPTS_LOG.md
+PROMPTS_ALL.md
 
 # --- Capture files (can be large / contain private traffic) ---
 *.pcap
@@ -26,6 +27,8 @@ dist/
 .venv/
 venv/
 env/
+# scripts/version_matrix.py: one environment per Python/library combination
+.matrix/
 
 # --- Tooling caches ---
 .pytest_cache/

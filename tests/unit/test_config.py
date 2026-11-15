@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from sniffdash.config import DEFAULT_GEMINI_MODEL, Settings, load_settings
+from sniffdash.config import (
+    DEFAULT_GEMINI_FALLBACK_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_THINKING_LEVEL, Settings, load_settings,
+)
 
-KEYS = ("GEMINI_API_KEY", "GEMINI_MODEL", "TSHARK_PATH")
+KEYS = ("GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_FALLBACK_MODEL", "GEMINI_THINKING_LEVEL", "TSHARK_PATH")
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +38,16 @@ def test_real_environment_wins_over_env_file(tmp_path, monkeypatch):
 def test_missing_env_file_is_fine(tmp_path):
     s = load_settings(tmp_path / "does-not-exist.env")
     assert s.gemini_api_key is None and s.gemini_model == DEFAULT_GEMINI_MODEL
+
+
+def test_speed_and_quota_settings_default_on_and_can_be_turned_off(tmp_path):
+    s = load_settings(tmp_path / "does-not-exist.env")
+    assert (s.gemini_fallback_model, s.gemini_thinking_level) == (DEFAULT_GEMINI_FALLBACK_MODEL,
+                                                                   DEFAULT_GEMINI_THINKING_LEVEL)
+    env = tmp_path / ".env"
+    env.write_text("GEMINI_FALLBACK_MODEL=\nGEMINI_THINKING_LEVEL=\n")      # empty = off
+    s = load_settings(env)
+    assert (s.gemini_fallback_model, s.gemini_thinking_level) == (None, None)
 
 
 def test_repr_never_shows_the_key():

@@ -1,0 +1,11 @@
+# SniffDash Streamlit settings (no secrets here; .streamlit/secrets.toml is git-ignored).
+
+[browser]
+# Streamlit sends anonymous usage statistics by default. Captures may be sensitive,
+# so SniffDash opts out (the same privacy stance as the Gemini redaction).
+gatherUsageStats = false
+
+[server]
+# Default is 200 MB; course captures can be larger. Parsing is still bounded by
+# the "Max packets" sidebar setting.
+maxUploadSize = 500

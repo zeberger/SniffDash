@@ -73,8 +73,8 @@ changes, `.env.example`, README, the Phase 3 plan and this report, and the PRD u
 
 ## Delivery
 
-- **Commits:** `5b7a726 docs(prp): record delivery links for PRs #2 and #3`; Phase 3: `Not created`
-- **Pull Request:** `Not opened`
+- **Commits:** `5b7a726 docs(prp): record delivery links for PRs #2 and #3`; `aaa654c feat(phase-3): AI Q&A with Gemini, verified citations and HTTPS flow analysis`
+- **Pull Request:** `https://github.com/zeberger/SniffDash/pull/4` (merged as `1f93cfe`)
 - **Base / Head:** `main <- feat/phase-3-ai-qa`
 - **Source PRD:** `PRPs/prds/sniffdash.prd.md` — phase 3 marked `complete`
 - **Tracked follow-ups:** `None`

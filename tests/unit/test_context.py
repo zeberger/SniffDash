@@ -30,6 +30,16 @@ def test_all_sections_present(report):
     assert overview["slowest"][0]["id"] == "tx-4" and overview["slowest"][0]["rt_ms"] == pytest.approx(120.0)
 
 
+def test_both_frames_carry_their_timestamps(report):
+    """Plan R1.3: a 'slowest request' answer can cite request and response with no lookup."""
+    ctx = ContextBuilder().build(report)
+    slowest = ctx["http_overview"]["slowest"][0]
+    assert (slowest["req_frame"], slowest["req_time"]) == (4, "2023-11-14T22:13:20.030Z")
+    assert (slowest["resp_frame"], slowest["resp_time"]) == (5, "2023-11-14T22:13:20.150Z")
+    unanswered = next(r for r in ctx["transaction_index"]["rows"] if r[2] is None)
+    assert unanswered[4] is None                               # no response → no response time
+
+
 def test_full_index_when_it_fits(report):
     index = ContextBuilder().build(report)["transaction_index"]
     assert [row[0] for row in index["rows"]] == ["tx-4", "tx-6", "tx-13"] and "truncated" not in index
@@ -54,6 +64,16 @@ def test_deterministic_and_serializable(report):
 def test_budget_is_respected_when_rows_must_go(report):
     builder = ContextBuilder(budget_tokens=estimate_tokens(ContextBuilder.render(ContextBuilder().build(report))) - 5)
     assert estimate_tokens(ContextBuilder.render(builder.build(report))) <= builder._budget
+
+
+def test_partial_capture_is_announced_to_the_model():
+    # Audit A1: a capture cut by the packet limit must not look complete to the AI.
+    from sniffdash.domain.models import Frame
+    repo = InMemoryFrameRepository([Frame(number=1, timestamp=0.0, length=60)])
+    partial = ContextBuilder().build(AnalysisEngine().run(repo, partial=True))["capture"]
+    complete = ContextBuilder().build(AnalysisEngine().run(repo))["capture"]
+    assert partial["partial"] is True and "loaded portion" in partial["partial_note"]
+    assert complete["partial"] is False and "partial_note" not in complete
 
 
 def test_empty_capture():

@@ -32,14 +32,18 @@ def _ms(value: float | None) -> float | None:
 
 
 def index_row(tx: HttpTransaction) -> list[Any]:
-    """[id, req_frame, resp_frame, req_time, method, host, uri, status, rt_ms]."""
+    """[id, req_frame, resp_frame, req_time, resp_time, method, host, uri, status, rt_ms].
+
+    Both frames carry their timestamps, so a question answerable from the overview can
+    cite request AND response without a lookup (one Gemini request instead of three).
+    """
     resp = tx.response
     return [tx.id, tx.request.frame_number, resp.frame_number if resp else None,
-            format_ts(tx.request.timestamp), tx.request.method, tx.request.effective_host,
-            tx.request.uri, tx.status_code, _ms(tx.response_time_ms)]
+            format_ts(tx.request.timestamp), format_ts(resp.timestamp) if resp else None,
+            tx.request.method, tx.request.effective_host, tx.request.uri, tx.status_code, _ms(tx.response_time_ms)]
 
 
-INDEX_COLUMNS = ["id", "req_frame", "resp_frame", "req_time", "method", "host", "uri", "status", "rt_ms"]
+INDEX_COLUMNS = ["id", "req_frame", "resp_frame", "req_time", "resp_time", "method", "host", "uri", "status", "rt_ms"]
 
 
 class ContextBuilder:
@@ -77,11 +81,16 @@ class ContextBuilder:
                 "start": format_ts(s.start_ts) if s.start_ts is not None else None,
                 "end": format_ts(s.end_ts) if s.end_ts is not None else None,
                 "duration_s": round(s.duration_s, 6),
+                "partial": report.partial,
             },
             "protocols": dict(s.protocol_distribution),
             "top_sources": dict(s.top_sources),
             "top_destinations": dict(s.top_destinations),
         }
+        if report.partial:
+            context["capture"]["partial_note"] = (
+                "Only part of the file was analyzed (truncated file or packet limit). "
+                "All counts describe the loaded portion only.")
 
         http = report.get(HttpAnalysisResult)
         if http is not None:

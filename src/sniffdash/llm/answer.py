@@ -112,6 +112,7 @@ class ValidatedAnswer:
     insufficient_data: bool
     skill_level: SkillLevel
     tools_used: tuple[str, ...] = field(default=())
+    model: str | None = None  # which model answered (the fallback, when the main quota ran out)
 
     @property
     def fully_grounded(self) -> bool:
